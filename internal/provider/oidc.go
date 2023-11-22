@@ -1,8 +1,12 @@
 package provider
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+
 	"github.com/coreos/go-oidc"
 	"golang.org/x/oauth2"
 )
@@ -17,6 +21,7 @@ type OIDC struct {
 
 	provider *oidc.Provider
 	verifier *oidc.IDTokenVerifier
+	token *oauth2.Token
 }
 
 // Name returns the name of the provider
@@ -69,7 +74,8 @@ func (o *OIDC) ExchangeCode(redirectURI, code string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	o.token = token
+	
 	// Extract ID token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
@@ -80,7 +86,7 @@ func (o *OIDC) ExchangeCode(redirectURI, code string) (string, error) {
 }
 
 // GetUser uses the given token and returns a complete provider.User object
-func (o *OIDC) GetUser(token, _ string) (string, error) {
+func (o *OIDC) GetUser(token, UserPath string) (string, error) {
 	// Parse & Verify ID Token
 	idToken, err := o.verifier.Verify(o.ctx, token)
 	if err != nil {
@@ -88,10 +94,27 @@ func (o *OIDC) GetUser(token, _ string) (string, error) {
 	}
 
 	// Extract custom claims
-	var user User
-	if err := idToken.Claims(&user); err != nil {
+	// var user User
+	// if err := idToken.Claims(&user); err != nil {
+	// 	return "", err
+	// }
+	// return user.Email, nil
+	var claimsMap map[string]interface{}
+	if err := idToken.Claims(&claimsMap); err != nil {
+		return "", err
+	}
+	// fmt.Println(claimsMap)
+	// 将 map 转换为 JSON 字节流
+	jsonBytes, err := json.Marshal(claimsMap)
+	if err != nil {
+		fmt.Println("JSON marshaling error:", err)
 		return "", err
 	}
 
-	return user.Email, nil
+	// 创建实现了 io.Reader 接口的对象
+	reader := bytes.NewReader(jsonBytes)
+	
+	return GetUser(reader, UserPath)
 }
+
+

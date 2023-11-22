@@ -105,6 +105,105 @@ services:
       - "traefik.http.routers.whoami.rule=Host(`whoami.mycompany.com`)"
       - "traefik.http.routers.whoami.middlewares=traefik-forward-auth"
 ```
+```yaml
+version: '3'
+
+services:
+  reverse-proxy:
+    # The official v2 Traefik docker image
+    image: traefik:v2.10
+    container_name: traefik
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      - ACME_DNS_API_BASE=https://auth.acme-dns.io
+      - ACME_DNS_STORAGE_PATH=/acme-dns
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/traefik.yml:/traefik.yml:ro
+      - ./data/acme.json:/acme.json
+      - ./data/acme-dns:/acme-dns
+      # Add folder with dynamic configuration yml
+      - ./data/configurations:/configurations
+    labels:
+      - "traefik.enable=true"
+        #- "traefik.docker.network=proxy"
+      - "traefik.http.routers.traefik-secure.entrypoints=websecure"
+      - "traefik.http.routers.traefik-secure.rule=Host(`traefik.chatwithdoc.cn`)"
+      - "traefik.http.routers.traefik-secure.middlewares=user-auth@file"
+      - "traefik.http.routers.traefik-secure.service=api@internal"
+
+  whoami:
+    # A container that exposes an API to show its IP address
+    image: traefik/whoami
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.chatwithdoc.cn`)"
+        #      - "traefik.http.routers.whoami.middlewares=user-auth@file"
+      - "traefik.http.routers.whoami.middlewares=traefik-forward-auth"
+        #  chatchat:
+        #    image: nathubs/chatchat:1.3
+        #    labels:
+        #      - "traefik.enable=true"
+        #      - "traefik.http.routers.chatchat.entrypoints=websecure"
+        #      - "traefik.http.routers.chatchat.rule=Host(`lang.chatwithdoc.cn`)"
+        #      - "traefik.http.services.chatchat.loadbalancer.server.port=8501"
+  traefik-forward-auth:
+    #    image: thomseddon/traefik-forward-auth:2
+    image: nathubs/traefik-forward-auth:0.1
+    restart: always
+    environment:
+      - LOG_LEVEL=trace
+      - DEFAULT_PROVIDER=oidc
+      - PROVIDERS_OIDC_ISSUER_URL=https://ai-x.authing.cn/oidc
+      - PROVIDERS_OIDC_CLIENT_ID=63e07af8e9ffdd4b81c6aafd
+      - PROVIDERS_OIDC_CLIENT_SECRET=dd86ca94f5d41738faca9af666b528a8
+      - PROVIDERS_OIDC_RESOURCE=https://ai-x.authing.cn/oidc/me
+      - SECRET=something-random
+        #- WHITELIST=6528db97a468ef706d4457c4
+      - USER_ID_PATH=sub
+        #      - INSECURE_COOKIE=true
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.middlewares.traefik-forward-auth.forwardauth.address=http://traefik-forward-auth:4181"
+      - "traefik.http.middlewares.traefik-forward-auth.forwardauth.authResponseHeaders=X-Forwarded-User"
+      - "traefik.http.services.traefik-forward-auth.loadbalancer.server.port=4181"
+```
+```html
+Hostname: c1229777816c
+IP: 127.0.0.1
+IP: 192.168.240.3
+RemoteAddr: 192.168.240.2:40276
+GET / HTTP/1.1
+Host: whoami.chatwithdoc.cn
+User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/119.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8
+Accept-Encoding: gzip, deflate, br
+Accept-Language: en-US,en;q=0.5
+Cookie: _forward_auth=p3vVfoBzjz7hTddqwOSOyYw32hhE6XuEeQz_QCT-ip4=|1700676248|6528db97a468ef706d4457c4
+Referer: https://ai-x.authing.cn/
+Sec-Fetch-Dest: document
+Sec-Fetch-Mode: navigate
+Sec-Fetch-Site: cross-site
+Sec-Fetch-User: ?1
+Te: trailers
+Upgrade-Insecure-Requests: 1
+X-Forwarded-For: 103.220.9.173
+X-Forwarded-Host: whoami.chatwithdoc.cn
+X-Forwarded-Port: 443
+X-Forwarded-Proto: https
+X-Forwarded-Server: 86a208d0a883
+X-Forwarded-User: 6528db97a468ef706d4457c4
+X-Real-Ip: 103.220.9.173
+```
 
 #### Advanced:
 
